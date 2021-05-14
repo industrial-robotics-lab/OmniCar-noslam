@@ -9,8 +9,8 @@
 #include "serial_utils.h"
 #include <mutex>
 
-#define SERVER_IP "192.168.0.119"
-// #define SERVER_IP "127.0.0.1"
+// #define SERVER_IP "192.168.0.119"
+#define SERVER_IP "127.0.0.1"
 #define TCP_SERVER_PORT 10001
 #define UDP_SERVER_PORT 10002
 #define BUFFER_SIZE 1024

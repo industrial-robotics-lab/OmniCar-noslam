@@ -12,6 +12,7 @@ include_directories(
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/exe)
 add_executable(noslam src/main.cpp)
+add_executable(tcp src/test_tcp.cpp)
 
 target_link_libraries(noslam ${OpenCV_LIBS} Threads::Threads)
 
