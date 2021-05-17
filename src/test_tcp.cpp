@@ -4,7 +4,8 @@
 #include <arpa/inet.h>
 #include <string.h>
 
-#define SERVER_IP "127.0.0.1"
+#define SERVER_IP "192.168.0.119"
+// #define SERVER_IP "127.0.0.1"
 #define TCP_SERVER_PORT 10001
 #define BUFFER_SIZE 1024
 #define TIMEOUT 10
@@ -75,11 +76,11 @@ int main()
             cout << "Client disconnected " << endl;
             break;
         }
-        // cout << "Received " << bytesReceived << "bytes" << endl;
+        cout << "Received " << bytesReceived << "bytes" << endl;
 
-        if (bytesReceived == 12)
+        if (bytesReceived == 3)
         {
-            memcpy(controlVec, buffer, 12);
+            memcpy(controlVec, buffer, 3);
             printf("Got [%i, %i, %i] from TCP\n", controlVec[0], controlVec[1], controlVec[2]);
         }
     }

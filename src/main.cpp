@@ -9,8 +9,8 @@
 #include "serial_utils.h"
 #include <mutex>
 
-// #define SERVER_IP "192.168.0.119"
-#define SERVER_IP "127.0.0.1"
+#define SERVER_IP "192.168.0.119"
+// #define SERVER_IP "127.0.0.1"
 #define TCP_SERVER_PORT 10001
 #define UDP_SERVER_PORT 10002
 #define BUFFER_SIZE 1024
@@ -57,17 +57,19 @@ void udp_tx()
     {
         cerr << "Error: Can't open camera" << endl;
     }
+    Mat imgFlipped;
     Mat img;
     while (true)
     {
-        cap >> img;
+        cap >> imgFlipped;
+        flip(imgFlipped, img, -1);
         if (img.empty())
             break;
 
         vector<uchar> imgBuffer;
         std::vector<int> param(2);
         param[0] = cv::IMWRITE_JPEG_QUALITY;
-        param[1] = 50; //default(95) 0-100
+        param[1] = 80; //default(95) 0-100
         imencode(".jpg", img, imgBuffer, param);
         int imgBufferSize = imgBuffer.size();
         // cout << "Encoded image size: " << imgBufferSize << endl;
@@ -150,22 +152,26 @@ void tcp_rx()
         }
         // cout << "Received " << bytesReceived << "bytes" << endl;
 
-        if (bytesReceived == 12)
+        if (bytesReceived == 3)
         {
             unique_lock<mutex> lock(mutexControl);
-            memcpy(controlVec, buffer, 12);
-            printf("Got [%i, %i, %i] from TCP\n", controlVec[0], controlVec[1], controlVec[2]);
+            memcpy(controlVec, buffer, 3);
+            // printf("Got [%i, %i, %i] from TCP\n", controlVec[0], controlVec[1], controlVec[2]);
         }
     }
 
     // Close client socket
     close(clientSocket);
+    unique_lock<mutex> lock(mutexControl);
+    controlVec[0] = 127;
+    controlVec[1] = 127;
+    controlVec[2] = 127;
 }
 
 void serial_talk()
 {
     const char *portName = "/dev/ttyACM0";
-    float vec[3] = {0, 0, 0};
+    float feedbackPos[3] = {0, 0, 0};
     char n = '\n';
     int bytesSent = 0;
     int bytesRead = 0;
@@ -201,12 +207,12 @@ void serial_talk()
         if (buffer[13] == '\n')
         {
             readChecksum = buffer[0];
-            memcpy(vec, buffer + 1, 12);
-            calcChecksum = crc8((uint8_t *)vec, 12);
+            memcpy(feedbackPos, buffer + 1, 12);
+            calcChecksum = crc8((uint8_t *)feedbackPos, 12);
             bool isPassed = readChecksum == calcChecksum;
             if (isPassed)
             {
-                // printf("Received accurate: [%f; %f, %f];\n\n", vec[0], vec[1], vec[2]);
+                // printf("Received accurate: [%f; %f, %f];\n\n", feedbackPos[0], feedbackPos[1], feedbackPos[2]);
             }
         }
     }
@@ -219,6 +225,7 @@ int main()
     thread serial_thread(serial_talk);
     cout << "TCP, UDP and Serial threads started" << endl;
     tcp_thread.join();
-    tcp_thread.join();
+    udp_thread.join();
+    serial_thread.join();
     return 0;
 }
