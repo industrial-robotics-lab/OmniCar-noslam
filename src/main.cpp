@@ -9,10 +9,11 @@
 #include "serial_utils.h"
 #include <mutex>
 
-#define SERVER_IP "192.168.0.119"
-// #define SERVER_IP "127.0.0.1"
-#define TCP_SERVER_PORT 10001
-#define UDP_SERVER_PORT 10002
+// #define SERVER_IP "192.168.0.119"
+#define SERVER_IP "127.0.0.1"
+#define TCP_CONTROL_SERVER_PORT 10001
+#define UDP_VIDEO_SERVER_PORT 10002
+#define TCP_MAP_SERVER_PORT 10003
 #define BUFFER_SIZE 1024
 #define TIMEOUT 10
 
@@ -21,6 +22,9 @@ using namespace cv;
 
 std::mutex mutexControl;
 uint8_t controlVec[3] = {127, 127, 127}; // means zero velocity
+
+std::mutex mutexMap;
+float mapPoint[3] = {0, 0, 0};
 
 void udp_tx()
 {
@@ -35,7 +39,7 @@ void udp_tx()
     // Bind the ip address and port to a socket
     sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(UDP_SERVER_PORT);
+    serverAddress.sin_port = htons(UDP_VIDEO_SERVER_PORT);
     inet_pton(AF_INET, SERVER_IP, &serverAddress.sin_addr);
 
     bind(serverSocket, (sockaddr *)&serverAddress, sizeof(serverAddress));
@@ -69,7 +73,7 @@ void udp_tx()
         vector<uchar> imgBuffer;
         std::vector<int> param(2);
         param[0] = cv::IMWRITE_JPEG_QUALITY;
-        param[1] = 80; //default(95) 0-100
+        param[1] = 50; //default(95) 0-100
         imencode(".jpg", img, imgBuffer, param);
         int imgBufferSize = imgBuffer.size();
         // cout << "Encoded image size: " << imgBufferSize << endl;
@@ -100,7 +104,7 @@ void tcp_rx()
     // Bind the ip address and port to a socket
     sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(TCP_SERVER_PORT);
+    serverAddress.sin_port = htons(TCP_CONTROL_SERVER_PORT);
     inet_pton(AF_INET, SERVER_IP, &serverAddress.sin_addr);
 
     bind(serverSocket, (sockaddr *)&serverAddress, sizeof(serverAddress));
@@ -132,7 +136,6 @@ void tcp_rx()
     // Close listening (server) socket
     close(serverSocket);
 
-    // While loop: accept and echo message back to client
     char buffer[BUFFER_SIZE];
     while (true)
     {
@@ -166,6 +169,65 @@ void tcp_rx()
     controlVec[0] = 127;
     controlVec[1] = 127;
     controlVec[2] = 127;
+}
+
+void tcp_tx()
+{
+    // Create a socket
+    int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverSocket == -1)
+    {
+        cerr << "Error: Can't create a socket" << endl;
+    }
+
+    // Bind the ip address and port to a socket
+    sockaddr_in serverAddress;
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_port = htons(TCP_MAP_SERVER_PORT);
+    inet_pton(AF_INET, SERVER_IP, &serverAddress.sin_addr);
+
+    bind(serverSocket, (sockaddr *)&serverAddress, sizeof(serverAddress));
+
+    // Tell the socket is for listening
+    listen(serverSocket, SOMAXCONN);
+
+    // Wait for a connection
+    sockaddr_in clientAddress;
+    socklen_t clientSize = sizeof(clientAddress);
+    int clientSocket = accept(serverSocket, (sockaddr *)&clientAddress, &clientSize);
+
+    char hostName[NI_MAXHOST];   // Client's remote name
+    char clientPort[NI_MAXSERV]; // Service (i.e. port) the client is connect on
+
+    memset(hostName, 0, NI_MAXHOST);
+    memset(clientPort, 0, NI_MAXSERV);
+
+    if (getnameinfo((sockaddr *)&clientAddress, sizeof(clientAddress), hostName, NI_MAXHOST, clientPort, NI_MAXSERV, 0) == 0)
+    {
+        cout << hostName << " connected on port " << clientPort << endl;
+    }
+    else
+    {
+        inet_ntop(AF_INET, &clientAddress.sin_addr, hostName, NI_MAXHOST);
+        cout << hostName << " connected on port " << ntohs(clientAddress.sin_port) << endl;
+    }
+
+    // Close listening (server) socket
+    close(serverSocket);
+
+    char buffer[BUFFER_SIZE];
+
+    // tx data
+    while (true)
+    {
+        memset(buffer, 0, BUFFER_SIZE);
+
+        unique_lock<mutex> lock(mutexMap);
+        send(clientSocket, mapPoint, 12, 0);
+    }
+
+    // Close client socket
+    close(clientSocket);
 }
 
 void serial_talk()
@@ -206,13 +268,17 @@ void serial_talk()
 
         if (buffer[13] == '\n')
         {
-            readChecksum = buffer[0];
-            memcpy(feedbackPos, buffer + 1, 12);
+            memcpy(feedbackPos, buffer, 12);
+            readChecksum = buffer[12];
             calcChecksum = crc8((uint8_t *)feedbackPos, 12);
             bool isPassed = readChecksum == calcChecksum;
             if (isPassed)
             {
-                // printf("Received accurate: [%f; %f, %f];\n\n", feedbackPos[0], feedbackPos[1], feedbackPos[2]);
+                unique_lock<mutex> lock(mutexMap);
+                if (mapPoint[0] != feedbackPos[0] || mapPoint[1] != feedbackPos[1] || mapPoint[2] != feedbackPos[2])
+                {
+                    memcpy(mapPoint, feedbackPos, 12);
+                }
             }
         }
     }
@@ -220,12 +286,14 @@ void serial_talk()
 
 int main()
 {
-    thread tcp_thread(tcp_rx);
-    thread udp_thread(udp_tx);
+    thread tcp_rx_thread(tcp_rx);
+    thread udp_tx_thread(udp_tx);
+    thread tcp_tx_thread(tcp_tx);
     thread serial_thread(serial_talk);
     cout << "TCP, UDP and Serial threads started" << endl;
-    tcp_thread.join();
-    udp_thread.join();
+    tcp_rx_thread.join();
+    udp_tx_thread.join();
+    tcp_tx_thread.join();
     serial_thread.join();
     return 0;
 }
