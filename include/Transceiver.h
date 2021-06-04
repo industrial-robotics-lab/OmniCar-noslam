@@ -5,7 +5,6 @@
 #include <arpa/inet.h>
 #include <mutex>
 #include "opencv2/opencv.hpp"
-
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <string.h>
@@ -53,7 +52,6 @@ public:
     Transceiver(const char *portName, const char *ip, uint16_t portTcpRx, uint16_t portUdpTx, uint16_t portTcpTx);
     void run();
 };
-
 
 static const uint8_t crc_table[] = {
     0x00, 0x07, 0x0e, 0x09, 0x1c, 0x1b, 0x12, 0x15, 0x38, 0x3f, 0x36, 0x31,

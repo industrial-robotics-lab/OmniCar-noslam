@@ -23,6 +23,6 @@ Threads::Threads
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/exe)
 
-add_executable(out
+add_executable(OmniCar
 src/main.cpp)
-target_link_libraries(out ${PROJECT_NAME})
+target_link_libraries(OmniCar ${PROJECT_NAME})
