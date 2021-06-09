@@ -13,7 +13,7 @@ void Transceiver::run()
     thread mtTxUdp(&Transceiver::txVideoUdp, this);
     thread mtTxTcp(&Transceiver::txMapTcp, this);
     thread mtTalkSerial(&Transceiver::talkSerial, this);
-    cout << "TCP, UDP and Serial threads started" << endl;
+    cout << "Started 4 communication threads" << endl;
     mtRxTcp.join();
     mtTxUdp.join();
     mtTxTcp.join();
@@ -98,13 +98,19 @@ void Transceiver::txMapTcp()
 {
     int clientSocket = startTcp(ip, portTcpTx);
     char buffer[BUFFER_SIZE];
+    float prevMapPoint[3] = {100, 100, 100}; // some unrealistic value for first iteration check failure
     while (true)
     {
         memset(buffer, 0, BUFFER_SIZE);
 
         unique_lock<mutex> lock(mutexMap);
-        send(clientSocket, mapPoint, 12, 0);
-        // printf("Sent map point [%f, %f, %f] to UI\n", mapPoint[0], mapPoint[1], mapPoint[2]);
+        if (mapPoint[0] != prevMapPoint[0] || mapPoint[1] != prevMapPoint[1] || mapPoint[2] != prevMapPoint[2])
+        {
+            send(clientSocket, mapPoint, 12, 0);
+            // printf("Sent map point [%f, %f, %f] to UI\n", mapPoint[0], mapPoint[1], mapPoint[2]);
+            memcpy(prevMapPoint, mapPoint, 12);
+            // this_thread::sleep_for(50ms);
+        }
     }
     close(clientSocket);
 }
@@ -158,7 +164,7 @@ void Transceiver::talkSerial()
                 if (mapPoint[0] != feedbackPos[0] || mapPoint[1] != feedbackPos[1] || mapPoint[2] != feedbackPos[2])
                 {
                     memcpy(mapPoint, feedbackPos, 12);
-                    // printf("Got desired velocity [%f, %f, %f] from Arduino\n", mapPoint[0], mapPoint[1], mapPoint[2]);
+                    // printf("Got map point [%f, %f, %f] from Arduino\n", mapPoint[0], mapPoint[1], mapPoint[2]);
                 }
             }
         }
